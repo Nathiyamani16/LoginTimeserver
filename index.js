@@ -72,7 +72,7 @@ const emailjs = require('emailjs-com');
 
 const app = express();
 
-const PORT = process.env.PORT || 8080;
+// const PORT = process.env.PORT || 8080;
 
 
 
@@ -111,21 +111,7 @@ const createSuperAdmin = async () => {
 
 createSuperAdmin();
 
-// Login endpoint
-app.post('/login', async (req, res) => {
-  const { email, password } = req.body;
-  try {
-    const user = await User.findOne({ email });
-    if (!user || !(await bcrypt.compare(password, user.password))) {
-      return res.status(401).json({ message: 'Invalid credentials' });
-    }
 
-    res.json({ role: user.role });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
 app.post('/resetPassword', async (req, res) => {
   const { email, newPassword } = req.body;
 
@@ -136,6 +122,7 @@ app.post('/resetPassword', async (req, res) => {
 });
 
 
+// Define the admin schema
 const adminSchema = new mongoose.Schema({
   email: String,
   name: String,
@@ -143,31 +130,69 @@ const adminSchema = new mongoose.Schema({
   password: String
 });
 
+// Hash the password before saving
+adminSchema.pre('save', async function(next) {
+  const admin = this;
+  if (!admin.isModified('password')) {
+    return next();
+  }
+  const hashedPassword = await bcrypt.hash(admin.password, 10);
+  admin.password = hashedPassword;
+  next();
+});
+
+// Create the Admin model
 const Admin = mongoose.model('Admin', adminSchema);
 
-app.use(express.json());
-
-
-
-
-app.use(express.json());
-
-// Create admin endpoint
-// Create admin endpoint
+// Now you can use the Admin model to create a new admin instance
 app.post('/createAdmin', async (req, res) => {
   const { email, name, role, password } = req.body;
 
-  // Save admin to MongoDB
+  // Create a new admin instance
   const admin = new Admin({ email, name, role, password });
+
+  // Save the admin to the database
   await admin.save();
 
   res.status(200).json({ message: 'Admin created successfully' });
 });
+app.use(express.json());
 
 
 
-app.listen(8080, () => {
-  console.log('Server running on port 8080');
+
+app.use(express.json());
+app.post('/login', async (req, res) => {
+  const { email, password } = req.body;
+  try {
+    let user;
+    if (email === 'superadmin@example.com') {
+      user = await User.findOne({ email });
+    } else {
+      user = await Admin.findOne({ email });
+    }
+
+    console.log('Received email:', email);
+    console.log('Received password:', password);
+    console.log('User found:', user);
+
+    if (!user || !(await bcrypt.compare(password, user.password))) {
+      console.log('Invalid credentials');
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    res.json({ role: user.role });
+  } catch (error) {
+    console.error('Login error:', error.message);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+
+
+
+app.listen(5000, () => {
+  console.log('Server running on port 5000');
 });
 
 
