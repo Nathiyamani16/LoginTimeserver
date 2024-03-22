@@ -189,6 +189,55 @@ app.post('/login', async (req, res) => {
 });
 
 
+const employeeSchema = new mongoose.Schema({
+  name: String,
+  email: String,
+  password: String
+});
+
+const Employee = mongoose.model('Employee', employeeSchema);
+
+const departmentSchema = new mongoose.Schema({
+  name: String,
+  employees: [employeeSchema]
+});
+
+const Department = mongoose.model('Department', departmentSchema);
+
+app.use(bodyParser.json());
+
+app.post('/departments', async (req, res) => {
+  const { department } = req.body;
+
+  try {
+    const newDepartment = new Department({ name: department });
+    await newDepartment.save();
+    res.status(201).json(newDepartment);
+  } catch (error) {
+    console.error('Error creating department:', error);
+    res.status(500).json({ error: 'An error occurred while creating department.' });
+  }
+});app.post('/departments/:departmentId/employees', async (req, res) => {
+  const { name, email, password } = req.body;
+  const departmentId = req.params.departmentId;
+
+  try {
+    const department = await Department.findById(departmentId);
+    if (!department) {
+      return res.status(404).json({ error: 'Department not found.' });
+    }
+
+    const newEmployee = new Employee({ name, email, password });
+    department.employees.push(newEmployee);
+    await department.save();
+
+    res.status(201).json({ message: 'Employee added successfully.' });
+  } catch (error) {
+    console.error('Error adding employee:', error);
+    res.status(500).json({ error: 'An error occurred while adding employee.' });
+  }
+});
+
 
 
 app.listen(5000, () => {
