@@ -162,6 +162,36 @@ app.use(express.json());
 
 
 app.use(express.json());
+// // perfect
+// app.post('/login', async (req, res) => {
+//   const { email, password } = req.body;
+//   try {
+//     let user;
+//     if (email === 'superadmin@example.com') {
+//       user = await User.findOne({ email });
+//     } else {
+//       user = await Admin.findOne({ email });
+//       if (!user) {
+//         user =  Department.findOne({ 'employees.email': email });
+//       }
+//     }
+
+//     console.log('Received email:', email);
+//     console.log('Received password:', password);
+//     console.log('User found:', user);
+
+//     if (!user || !(await bcrypt.compare(password, user.password))) {
+//       console.log('Invalid credentials');
+//       return res.status(401).json({ message: 'Invalid credentials' });
+//     }
+
+//     res.json({ role: user.role });
+//   } catch (error) {
+//     console.error('Login error:', error.message);
+//     res.status(500).json({ message: 'Internal server error' });
+//   }
+// });
+
 app.post('/login', async (req, res) => {
   const { email, password } = req.body;
   try {
@@ -170,6 +200,12 @@ app.post('/login', async (req, res) => {
       user = await User.findOne({ email });
     } else {
       user = await Admin.findOne({ email });
+      if (!user) {
+        const department = await Department.findOne({ 'employees.email': email });
+        if (department) {
+          user = department.employees.find(emp => emp.email === email);
+        }
+      }
     }
 
     console.log('Received email:', email);
@@ -188,14 +224,70 @@ app.post('/login', async (req, res) => {
   }
 });
 
-
 const employeeSchema = new mongoose.Schema({
-  name: String,
-  email: String,
-  password: String
+  name: { type: String, required: true },
+  email: { type: String, required: true },
+  password: { type: String, required: true },
+  department: { type: mongoose.Schema.Types.ObjectId, ref: 'Department' },
+  role: { type: String, required: true } // Add role field
 });
 
 const Employee = mongoose.model('Employee', employeeSchema);
+
+
+
+
+// app.post('/login', async (req, res) => {
+//   const { email, password } = req.body;
+
+//   try {
+//     let user;
+//     // Check if the email belongs to a super admin
+//     const superAdmin = await User.findOne({ email });
+//     if (superAdmin && superAdmin.email === email && superAdmin.password === password) {
+//       user = superAdmin;
+//     } else {
+//       // Check if the email belongs to an admin
+//       const admin = await Admin.findOne({ email });
+//       if (admin && admin.email === email && admin.password === password) {
+//         user = admin;
+//       } else {
+//         // Check if the email belongs to a user
+//         user = await User.findOne({ email, password });
+//       }
+//     }
+
+//     if (user) {
+//       // User found, return success
+//       return res.status(200).json({ message: 'Login successful', user });
+//     } else {
+//       // User not found, return error
+//       return res.status(404).json({ error: 'Invalid credentials' });
+//     }
+//   } catch (error) {
+//     console.error('Error logging in:', error);
+//     res.status(500).json({ error: 'An error occurred while logging in' });
+//   }
+// });
+
+
+// const employeeSchema = new mongoose.Schema({
+//   name: String,
+//   email: String,
+//   password: String
+// });
+employeeSchema.pre('save', async function(next) {
+  const employee = this;
+  if (!employee.isModified('password')) {
+    return next();
+  }
+  const hashedPassword = await bcrypt.hash(employee.password, 10);
+  employee.password = hashedPassword;
+  next();
+});
+
+// // Create the Employee model
+// const Employee = mongoose.model('Employee', employeeSchema);
 
 const departmentSchema = new mongoose.Schema({
   name: String,
@@ -217,8 +309,30 @@ app.post('/departments', async (req, res) => {
     console.error('Error creating department:', error);
     res.status(500).json({ error: 'An error occurred while creating department.' });
   }
-});app.post('/departments/:departmentId/employees', async (req, res) => {
-  const { name, email, password } = req.body;
+});
+
+// app.post('/departments/:departmentId/employees', async (req, res) => {
+//   const { name, email, password } = req.body;
+//   const departmentId = req.params.departmentId;
+
+//   try {
+//     const department = await Department.findById(departmentId);
+//     if (!department) {
+//       return res.status(404).json({ error: 'Department not found.' });
+//     }
+
+//     const newEmployee = new Employee({ name, email, password });
+//     department.employees.push(newEmployee);
+//     await department.save();
+
+//     res.status(201).json({ message: 'Employee added successfully.' });
+//   } catch (error) {
+//     console.error('Error adding employee:', error);
+//     res.status(500).json({ error: 'An error occurred while adding employee.' });
+//   }
+// });
+app.post('/departments/:departmentId/employees', async (req, res) => {
+  const { name, email, password, role } = req.body;
   const departmentId = req.params.departmentId;
 
   try {
@@ -227,7 +341,7 @@ app.post('/departments', async (req, res) => {
       return res.status(404).json({ error: 'Department not found.' });
     }
 
-    const newEmployee = new Employee({ name, email, password });
+    const newEmployee = new Employee({ name, email, password, role }); // Include role field
     department.employees.push(newEmployee);
     await department.save();
 
@@ -237,6 +351,7 @@ app.post('/departments', async (req, res) => {
     res.status(500).json({ error: 'An error occurred while adding employee.' });
   }
 });
+
 
 
 
